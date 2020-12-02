@@ -1,0 +1,104 @@
+---
+title: "Course Project - Regression Models"
+author: "Venkat Ram Rao"
+date: "11/22/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This report represents the final course project for the Regression Models course, part of the John Hopkins  Statistics and Machine Learning Specialization on Coursera
+
+The purpose of the report is to explore the relationship between a set of variables and miles per gallon (MPG) (outcome). In particular answer the following questions:
+
+1. “Is an automatic or manual transmission better for MPG”
+2. "Quantify the MPG difference between automatic and manual transmissions"
+
+## Exploratory analysis
+mtcars is a dataset provided by R and contains 32 sample records from 1974 comparing fuel consumption(mpg) and 10 aspects of automobile design and performance for 32 automobiles 
+```{r mtcars}
+
+data(mtcars)
+dim(mtcars)
+str(mtcars)
+```
+Below is a simple plot showing the miles/gallon for manual and automatic transmission.
+```{r}
+library(ggplot2)
+my_boxplot <- ggplot(mtcars,aes(x=am,y=mpg, group=am, col=am)) + geom_boxplot() + xlab('Transmission (0 = automatic, 1 = manual)') + ylab('Miles per Gallon')
+my_boxplot 
+```
+At first glace, there seems to be a clear difference in mpg based on the Transmission.
+
+A better analysis can be done by running a T-test
+```{r}
+mtcars_am0 <- mtcars[which(mtcars$am == 0), names(mtcars) %in% c("mpg")]
+mtcars_am1 <- mtcars[which(mtcars$am == 1), names(mtcars) %in% c("mpg")]
+t.test(mtcars_am0, mtcars_am1, paired = FALSE, alternative="two.sided", var.equal=FALSE)
+```
+This shows that there is a mean difference of 7.24492mpg between cars with Manual versus Automatic transmission. The 95% confidence interval (-11.28,-3.21)  does not contain zero meaning we can say with a 95% confidence that Manual Transmission leads to better fuel economy.
+
+However, there are other variables which effect the mpg so additional analysis will need to be done as below
+
+## Regression Models
+
+#Data Prep:
+
+It seems all the data in mtcars is defined as numeric. I re-factored the 'am' column to better reflect the data:
+```{r}
+mtcars$am<-relevel(as.factor(mtcars$am), ref='0',labels=c('Automatic','Manual'))
+```
+
+#Simple model:
+
+Starting with a simple model of mpg vs Transmission type
+
+```{r}
+lm_am <- lm(mpg~factor(am) -1,data = mtcars)
+summary(lm_am)
+```
+shows a model with a high R-squared of (.9487). However, plotting the residuals:
+```{r}
+plot(predict(lm_am),resid(lm_am))
+```
+shows that the residual plot is definitely not random. Hence, a simple regression model with just Transmission type of not reliable.
+
+#Best model:
+Running a regression with all the variables show multiple variables with a strong correlation with mpg
+```{r}
+lm_all <- lm(mpg~. -1,data = mtcars)
+summary(lm_all)
+```
+In particular, weight(wt) has a strong negative coefficient. 1/4 mile time (qsec), Number of forward gears(gear) and Rear axle ratio(drat) seem to have a strong positive correlation as well
+
+The best model can be found by using the step function
+```{r}
+lm_best<-step(lm_all,direction ="both")
+summary(lm_best)
+```
+This gives us a model based on wt, qsec and tramsmission.
+wt    -3.9165     0.7112  -5.507 6.95e-06 ***
+qsec   1.2259     0.2887   4.247 0.000216 ***
+am0    9.6178     6.9596   1.382 0.177915    
+am1   12.5536     6.0573   2.072 0.047543 *  
+
+```{r}
+par(mfrow = c(2,2))
+plot(lm_best)
+```
+The residual plot is fairly random as well.
+
+##Conclusion
+
+Looking at the coefficients, it looks like:
+1. Changing the transmission from Automatic to Manual causes an increase in Fuel economy of 2.9358 mpg when controlled for all factors. This is less than what we got from a simple T-test but more accurate given the multitude of other factors.
+2. Weight and 1/4 mile time are also influential. Each 1000 lb increase in weight reduces fuel economy by 3.9165 mpg, 
+3. Increasing qsec also increases  Fuel Economy. This is interesting as there is no logical reason for this to be the case. This needs to be investigated further. There is a possibility
+that some bias crept in and qsec has strong correlations with other factors (e.g. hp)
+
+##Assumptions:
+1. The big issue with this analysis is that there are only 32 records in the data set. This is fairly small and if posible additional data needs to be identified.
